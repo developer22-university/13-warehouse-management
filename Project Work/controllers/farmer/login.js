@@ -1,12 +1,14 @@
 const bcrypt = require('bcrypt');
 const _ = require('lodash');
 const { farmerUser } = require('../../database/models/farmer');
-const { validate } = require('./validate');
+const { validate } = require('./validate_login');
 const { errorCustom } = require('../error/error');
+
+var jwt = require('jsonwebtoken');
 
 // This function checks the user's login credentials in database and respond accordingly.
 
-const authorizeFarmer = async (req, res) => {
+module.exports = async (req, res) => {
 	// First Validate The HTTP Request
 	const { error } = validate(req.body);
 	if (error) {
@@ -14,7 +16,7 @@ const authorizeFarmer = async (req, res) => {
 			error.details[0].path[0],
 			error.details[0].type
 		);
-		return res.send({ status: 'Fail', data: null, error: errorBlock });
+		return res.send({ success: false, data: null, error: errorBlock });
 	}
 
 	//  Now find the user by their email address
@@ -23,7 +25,7 @@ const authorizeFarmer = async (req, res) => {
 		user = await farmerUser.findOne({ username: req.body.userEmail });
 		if (!user) {
 			return res.send({
-				status: 'Fail',
+				success: false,
 				data: null,
 				error: { errCode: 1052, msg: 'Incorrect email/username or password.' },
 			});
@@ -35,22 +37,23 @@ const authorizeFarmer = async (req, res) => {
 	const validPassword = await bcrypt.compare(req.body.password, user.password);
 	if (!validPassword) {
 		return res.send({
-			status: 'Fail',
+			success: false,
 			data: null,
 			error: { errCode: 1052, msg: 'Incorrect email/username or password.' },
 		});
 	}
 
-	let data = {
-		userEmail: req.body.userEmail,
-		password: req.body.password,
-	};
+	const token = jwt.sign(
+		{
+			userId: user._id,
+		},
+		process.env.SECRET
+	);
 
-  
-	res.cookie('cookiedata', JSON.stringify(data));
+	res.cookie('token', token);
 
 	return res.send({
-		status: 'Pass',
+		success: true,
 		data: _.pick(user, [
 			'_id',
 			'firstName',
@@ -63,5 +66,3 @@ const authorizeFarmer = async (req, res) => {
 		error: null,
 	});
 };
-
-exports.authorizeFarmer = authorizeFarmer;
